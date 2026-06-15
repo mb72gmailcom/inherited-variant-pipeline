@@ -2,10 +2,23 @@
 
 Analyze rare variants in family trios from a VCF, precomputed gnomAD allele-frequency JSON, and a family relations file.
 
-## Install
+## Run
+
+**Without installing** (clone and run from the project directory):
+
+```bash
+python run.py analyze \
+  --vcf chr22.vcf.gz \
+  --af-json gnomad_chr22.json \
+  --family-file families.tsv \
+  -o results/chr22
+```
+
+**Or install** so the `inherited` command is on your PATH:
 
 ```bash
 pip install -e ".[dev]"
+inherited analyze --vcf chr22.vcf.gz --af-json gnomad_chr22.json -o results/chr22
 ```
 
 ## Family file format
@@ -35,7 +48,7 @@ Variants with AF above the threshold are skipped. Missing keys default to `0` an
 ## Usage
 
 ```bash
-inherited analyze \
+python run.py analyze \
   --vcf chr22.vcf.gz \
   --af-json gnomad_chr22.json \
   --family-file families.tsv \
@@ -45,7 +58,7 @@ inherited analyze \
 Disable multiallelic per-ALT processing:
 
 ```bash
-inherited analyze --vcf chr22.vcf.gz --af-json gnomad.json -o results/chr22 --no-multiallelic
+python run.py analyze --vcf chr22.vcf.gz --af-json gnomad.json -o results/chr22 --no-multiallelic
 ```
 
 ## Output
