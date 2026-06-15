@@ -1,0 +1,6 @@
+{
+  "var_rare": 0.001,
+  "var_common": 0.05,
+  "var_inh": 0.001,
+  "var_bad": 0.001
+}
