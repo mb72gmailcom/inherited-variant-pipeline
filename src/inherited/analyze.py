@@ -4,10 +4,20 @@ import gzip
 import json
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
+from inherited import __version__
 from inherited.af import is_rare, load_af_json
-from inherited.constants import DEFAULT_AF_THRESHOLD
+from inherited.constants import (
+    DEFAULT_AB,
+    DEFAULT_AF_THRESHOLD,
+    DEFAULT_DP,
+    DEFAULT_GQ,
+    DEFAULT_HAPLO_AB,
+    DEFAULT_HAPLO_DP,
+)
 from inherited.families import build_trio_indices, load_family_relations
 from inherited.genotype import get_good_site
 
@@ -266,6 +276,41 @@ def save_results(
         },
     )
     return stats
+
+
+def save_run_params(
+    output_dir: Path,
+    *,
+    vcf_path: Path,
+    af_json_path: Path,
+    family_file: Path,
+    multiallelic: bool,
+    af_threshold: float,
+) -> Path:
+    """Write the parameters for this run to the parent of the chromosome output dir."""
+    batch_dir = output_dir.parent
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    params_path = batch_dir / "params.json"
+
+    payload: dict[str, Any] = {
+        "package_version": __version__,
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "vcf": str(vcf_path.resolve()),
+        "af_json": str(af_json_path.resolve()),
+        "family_file": str(family_file.resolve()),
+        "output_dir": str(output_dir.resolve()),
+        "multiallelic": multiallelic,
+        "af_threshold": af_threshold,
+        "quality_filters": {
+            "gq": DEFAULT_GQ,
+            "dp": DEFAULT_DP,
+            "ab": DEFAULT_AB,
+            "haplo_dp": DEFAULT_HAPLO_DP,
+            "haplo_ab": DEFAULT_HAPLO_AB,
+        },
+    }
+    _write_json(params_path, payload)
+    return params_path
 
 
 def _write_json(path: Path, payload: object) -> None:
