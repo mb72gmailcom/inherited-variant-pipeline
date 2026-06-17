@@ -287,10 +287,9 @@ def save_run_params(
     multiallelic: bool,
     af_threshold: float,
 ) -> Path:
-    """Write the parameters for this run to the parent of the chromosome output dir."""
-    batch_dir = output_dir.parent
-    batch_dir.mkdir(parents=True, exist_ok=True)
-    params_path = batch_dir / "params.json"
+    """Write the parameters for this run into the chromosome output directory."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    params_path = output_dir / "params.json"
 
     payload: dict[str, Any] = {
         "package_version": __version__,

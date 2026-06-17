@@ -71,8 +71,9 @@ The output directory contains:
 - `inherited_per_person.json` — person id → number of inherited variants for that person
 - `mendelian_bad_per_gt.json` — `mother_gt:father_gt:child_gt` → number of people with that pattern
 - `stats.json` — summary counts
+- `params.json` — parameters used for this run
 
-When using per-chromosome output directories (e.g. `-o results/chr22`), the run parameters are written to `results/params.json` (one level above the chromosome subdirectory). Each run overwrites this file with the parameters used for that run.
+Each chromosome output directory (e.g. `results/chr22/`) contains its own `params.json` alongside the result files.
 
 Each entry in `inherited.json` / `mendelian_bad.json` stores `(mother_GT, father_GT, child_GT, child_GQ)`.
 

@@ -37,6 +37,17 @@ def test_is_good_rejects_low_dp():
     assert not is_good("0/1", "5", "2,3", "0,0,0,0", "30", 1)
 
 
+def test_is_good_rejects_missing_ad():
+    assert not is_good("0/1", "30", ".", "0,0,0,0", "30", 1)
+    assert not is_good("0/1", "30", "15,.", "0,0,0,0", "30", 1)
+
+
+def test_get_good_site_handles_missing_ad():
+    sample = "0/1:30:.:0,0,0,0:30:0,30,30:."
+    ac, gt, gq = get_good_site(sample, 1)
+    assert ac == -1
+
+
 def test_get_good_site_counts_alt():
     sample = "0/1:30:15,15:0,0,0,0:30:0,30,30:."
     ac, gt, gq = get_good_site(sample, 1)

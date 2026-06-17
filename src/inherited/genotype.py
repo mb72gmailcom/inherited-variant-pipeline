@@ -7,6 +7,27 @@ from inherited.constants import (
 )
 
 
+def _parse_int_field(value: str) -> int | None:
+    if value in ("", "."):
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _parse_ad_field(ad: str) -> list[int] | None:
+    if not ad or ad == ".":
+        return None
+    values: list[int] = []
+    for part in ad.split(","):
+        parsed = _parse_int_field(part)
+        if parsed is None:
+            return None
+        values.append(parsed)
+    return values or None
+
+
 def is_good(
     gt: str,
     dp: str,
@@ -17,12 +38,18 @@ def is_good(
 ) -> bool:
     if "." in gt:
         return False
-    if dp == "." or int(dp) < DEFAULT_DP:
-        return False
-    if gq == "." or int(gq) < DEFAULT_GQ:
+
+    dp_value = _parse_int_field(dp)
+    if dp_value is None or dp_value < DEFAULT_DP:
         return False
 
-    ads = [int(x) for x in ad.split(",")]
+    gq_value = _parse_int_field(gq)
+    if gq_value is None or gq_value < DEFAULT_GQ:
+        return False
+
+    ads = _parse_ad_field(ad)
+    if ads is None or len(ads) <= alt_index:
+        return False
     if sum(ads) == 0:
         return False
     if ads[alt_index] / sum(ads) < DEFAULT_AB:

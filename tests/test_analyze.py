@@ -45,7 +45,7 @@ def test_analyze_vcf_writes_inherited_and_bad(tmp_path):
         multiallelic=True,
         af_threshold=0.01,
     )
-    assert params_path == tmp_path / "out" / "params.json"
+    assert params_path == tmp_path / "out" / "chr22" / "params.json"
     params = json.loads(params_path.read_text())
     assert params["multiallelic"] is True
     assert params["vcf"].endswith("tiny.vcf")
