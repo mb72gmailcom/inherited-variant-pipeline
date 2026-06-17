@@ -31,13 +31,17 @@ def is_good(
 
 
 def get_good_site(sample_field: str, alt_index: int = 1) -> tuple[int, str, str]:
-    """Return allele count, GT, and GQ for one alternate allele."""
+    """Return allele count, GT, and GQ for one alternate allele.
+
+    Returns ``-1`` when the site fails quality filters or FORMAT is incomplete.
+    Returns ``0`` for a good-quality homozygous-reference call.
+    """
     parts = sample_field.split(":")
     if len(parts) < 6:
-        return 0, ".", "0"
+        return -1, ".", "0"
 
     gt, dp, ad, sb, gq = parts[0], parts[1], parts[2], parts[3], parts[4]
     if is_good(gt, dp, ad, sb, gq, alt_index):
         ac = sum(int(g) == alt_index for g in gt.replace("|", "/").split("/"))
         return ac, gt, gq
-    return 0, ".", "0"
+    return -1, ".", "0"

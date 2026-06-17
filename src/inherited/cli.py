@@ -6,6 +6,7 @@ from pathlib import Path
 
 from inherited.analyze import analyze_vcf, save_results
 from inherited.constants import DEFAULT_AF_THRESHOLD, DEFAULT_FAMILY_FILE
+from inherited.params import build_run_params, save_params
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,6 +78,15 @@ def main(argv: list[str] | None = None) -> None:
             af_threshold=args.af_threshold,
         )
         stats = save_results(args.output_dir, dinh, dm_bad, stats)
+        run_params = build_run_params(
+            vcf_path=args.vcf,
+            af_json_path=args.af_json,
+            family_file=args.family_file,
+            output_dir=args.output_dir,
+            multiallelic=args.multiallelic,
+            af_threshold=args.af_threshold,
+        )
+        params_path = save_params(args.output_dir, run_params)
         print(
             f"Wrote {stats.inherited_entries} inherited entries "
             f"({stats.inherited_variants} variants in inherited.json) and "
@@ -84,6 +94,7 @@ def main(argv: list[str] | None = None) -> None:
             f"({stats.mendelian_bad_variants} variants in mendelian_bad.json) "
             f"to {args.output_dir}"
         )
+        print(f"Wrote parameters to {params_path}")
 
 
 if __name__ == "__main__":

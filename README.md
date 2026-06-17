@@ -72,6 +72,8 @@ The output directory contains:
 - `mendelian_bad_per_gt.json` — `mother_gt:father_gt:child_gt` → number of people with that pattern
 - `stats.json` — summary counts
 
+When using per-chromosome output directories (e.g. `-o results/chr22`), a shared `params.json` is also written one level up (e.g. `results/params.json`). Each chromosome run adds an entry under `chromosome_runs`.
+
 Each entry in `inherited.json` / `mendelian_bad.json` stores `(mother_GT, father_GT, child_GT, child_GQ)`.
 
 ## Tests

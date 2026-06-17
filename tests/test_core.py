@@ -45,6 +45,14 @@ def test_get_good_site_counts_alt():
     assert gq == "30"
 
 
+def test_get_good_site_returns_negative_one_when_not_good():
+    sample = "0/1:5:2,3:0,0,0,0:30:0,30,30:."
+    ac, gt, gq = get_good_site(sample, 1)
+    assert ac == -1
+    assert gt == "."
+    assert gq == "0"
+
+
 @pytest.mark.parametrize(
     ("ac", "mac", "fac", "expected"),
     [

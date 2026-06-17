@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from inherited.analyze import analyze_vcf, save_results, summarize_inherited, summarize_mendelian_bad
+from inherited.params import build_run_params, save_params
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -36,6 +37,22 @@ def test_analyze_vcf_writes_inherited_and_bad(tmp_path):
     assert bad_per_gt["1/1:1/1:0/1"] == 1
     assert summary["inherited_variants"] == 1
     assert summary["mendelian_bad_variants"] == 1
+
+    params_path = save_params(
+        tmp_path / "out" / "chr22",
+        build_run_params(
+            vcf_path=FIXTURES / "tiny.vcf",
+            af_json_path=FIXTURES / "tiny_af.json",
+            family_file=FIXTURES / "families.tsv",
+            output_dir=tmp_path / "out" / "chr22",
+            multiallelic=True,
+            af_threshold=0.01,
+        ),
+    )
+    assert params_path == tmp_path / "out" / "params.json"
+    params = json.loads(params_path.read_text())
+    assert params["multiallelic"] is True
+    assert "chr22" in params["chromosome_runs"]
 
 
 def test_summarize_inherited_and_mendelian_bad():
