@@ -22,6 +22,32 @@ class AnalysisStats:
     alleles_tested: int = 0
     inherited_entries: int = 0
     mendelian_bad_entries: int = 0
+    inherited_variants: int = 0
+    mendelian_bad_variants: int = 0
+
+
+def summarize_inherited(
+    dinh: dict[str, dict[str, tuple[str, str, str, str]]],
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Return per-variant and per-person counts for inherited calls."""
+    per_variant = {variant_key: len(people) for variant_key, people in dinh.items()}
+    per_person: dict[str, int] = defaultdict(int)
+    for people in dinh.values():
+        for person_id in people:
+            per_person[person_id] += 1
+    return per_variant, dict(per_person)
+
+
+def summarize_mendelian_bad(
+    dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
+) -> dict[str, int]:
+    """Return counts keyed by mother_gt:father_gt:child_gt."""
+    per_gt_pattern: dict[str, int] = defaultdict(int)
+    for people in dm_bad.values():
+        for _person_id, (mother_gt, father_gt, child_gt, _child_gq) in people.items():
+            gt_key = f"{mother_gt}:{father_gt}:{child_gt}"
+            per_gt_pattern[gt_key] += 1
+    return dict(per_gt_pattern)
 
 
 def analyze_vcf(
@@ -214,20 +240,32 @@ def save_results(
     dinh: dict[str, dict[str, tuple[str, str, str, str]]],
     dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
     stats: AnalysisStats,
-) -> None:
+) -> AnalysisStats:
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    inherited_per_variant, inherited_per_person = summarize_inherited(dinh)
+    mendelian_bad_per_gt = summarize_mendelian_bad(dm_bad)
+
+    stats.inherited_variants = len(dinh)
+    stats.mendelian_bad_variants = len(dm_bad)
 
     _write_json(output_dir / "inherited.json", dinh)
     _write_json(output_dir / "mendelian_bad.json", dm_bad)
+    _write_json(output_dir / "inherited_per_variant.json", inherited_per_variant)
+    _write_json(output_dir / "inherited_per_person.json", inherited_per_person)
+    _write_json(output_dir / "mendelian_bad_per_gt.json", mendelian_bad_per_gt)
     _write_json(
         output_dir / "stats.json",
         {
             "variants_seen": stats.variants_seen,
             "alleles_tested": stats.alleles_tested,
             "inherited_entries": stats.inherited_entries,
+            "inherited_variants": stats.inherited_variants,
             "mendelian_bad_entries": stats.mendelian_bad_entries,
+            "mendelian_bad_variants": stats.mendelian_bad_variants,
         },
     )
+    return stats
 
 
 def _write_json(path: Path, payload: object) -> None:

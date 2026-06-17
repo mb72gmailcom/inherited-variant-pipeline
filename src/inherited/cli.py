@@ -76,10 +76,13 @@ def main(argv: list[str] | None = None) -> None:
             multiallelic=args.multiallelic,
             af_threshold=args.af_threshold,
         )
-        save_results(args.output_dir, dinh, dm_bad, stats)
+        stats = save_results(args.output_dir, dinh, dm_bad, stats)
         print(
-            f"Wrote {stats.inherited_entries} inherited and "
-            f"{stats.mendelian_bad_entries} mendelian_bad entries to {args.output_dir}"
+            f"Wrote {stats.inherited_entries} inherited entries "
+            f"({stats.inherited_variants} variants in inherited.json) and "
+            f"{stats.mendelian_bad_entries} mendelian_bad entries "
+            f"({stats.mendelian_bad_variants} variants in mendelian_bad.json) "
+            f"to {args.output_dir}"
         )
 
 
