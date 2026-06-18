@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from inherited.analyze import analyze_vcf, save_results, save_run_params
-from inherited.constants import DEFAULT_AF_THRESHOLD, DEFAULT_FAMILY_FILE
+from inherited.constants import DEFAULT_AF_THRESHOLD
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,9 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze.add_argument(
         "--family-file",
+        required=True,
         type=Path,
-        default=Path(DEFAULT_FAMILY_FILE),
-        help=f"Tab-separated family relations file (default: {DEFAULT_FAMILY_FILE})",
+        help="Tab-separated family relations file",
     )
     analyze.add_argument(
         "-o",

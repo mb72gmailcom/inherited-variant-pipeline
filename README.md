@@ -18,12 +18,12 @@ python run.py analyze \
 
 ```bash
 pip install -e ".[dev]"
-inherited analyze --vcf chr22.vcf.gz --af-json gnomad_chr22.json -o results/chr22
+inherited analyze --vcf chr22.vcf.gz --af-json gnomad_chr22.json --family-file families.tsv -o results/chr22
 ```
 
 ## Family file format
 
-Tab-separated file (default: `families.tsv`):
+Tab-separated file (required via `--family-file`):
 
 ```text
 spid    family_id    father_id    mother_id
@@ -58,7 +58,7 @@ python run.py analyze \
 Disable multiallelic per-ALT processing:
 
 ```bash
-python run.py analyze --vcf chr22.vcf.gz --af-json gnomad.json -o results/chr22 --no-multiallelic
+python run.py analyze --vcf chr22.vcf.gz --af-json gnomad.json --family-file families.tsv -o results/chr22 --no-multiallelic
 ```
 
 ## Output
