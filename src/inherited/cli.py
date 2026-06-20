@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from inherited.analyze import analyze_vcf, save_results, save_run_params
-from inherited.constants import DEFAULT_AF_THRESHOLD
+from inherited.constants import DEFAULT_AF_THRESHOLD, DEFAULT_MEMORY_BLOCK
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,6 +51,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_AF_THRESHOLD,
         help=f"Maximum gnomAD AF to include (default: {DEFAULT_AF_THRESHOLD})",
     )
+    analyze.add_argument(
+        "--debug",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Print memory usage periodically during analysis (default: False)",
+    )
+    analyze.add_argument(
+        "--memory-block",
+        type=int,
+        default=DEFAULT_MEMORY_BLOCK,
+        help=f"Variant interval for debug memory logging (default: {DEFAULT_MEMORY_BLOCK})",
+    )
 
     return parser
 
@@ -75,6 +87,8 @@ def main(argv: list[str] | None = None) -> None:
             family_file=args.family_file,
             multiallelic=args.multiallelic,
             af_threshold=args.af_threshold,
+            debug=args.debug,
+            memory_block=args.memory_block,
         )
         stats = save_results(args.output_dir, dinh, dm_bad, stats)
         params_path = save_run_params(
@@ -84,6 +98,8 @@ def main(argv: list[str] | None = None) -> None:
             family_file=args.family_file,
             multiallelic=args.multiallelic,
             af_threshold=args.af_threshold,
+            debug=args.debug,
+            memory_block=args.memory_block,
         )
         print(
             f"Wrote {stats.inherited_entries} inherited entries "

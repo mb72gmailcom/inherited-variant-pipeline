@@ -61,6 +61,18 @@ Disable multiallelic per-ALT processing:
 python run.py analyze --vcf chr22.vcf.gz --af-json gnomad.json --family-file families.tsv -o results/chr22 --no-multiallelic
 ```
 
+Enable debug memory logging every 50,000 variants (custom interval with `--memory-block`):
+
+```bash
+python run.py analyze \
+  --vcf chr22.vcf.gz \
+  --af-json gnomad.json \
+  --family-file families.tsv \
+  -o results/chr22 \
+  --debug \
+  --memory-block 50000
+```
+
 ## Output
 
 The output directory contains:

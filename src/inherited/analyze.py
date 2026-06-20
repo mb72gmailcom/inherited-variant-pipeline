@@ -17,7 +17,9 @@ from inherited.constants import (
     DEFAULT_GQ,
     DEFAULT_HAPLO_AB,
     DEFAULT_HAPLO_DP,
+    DEFAULT_MEMORY_BLOCK,
 )
+from inherited.debug import log_memory_if_due
 from inherited.families import build_trio_indices, load_family_relations
 from inherited.genotype import get_good_site
 
@@ -67,6 +69,8 @@ def analyze_vcf(
     *,
     multiallelic: bool = True,
     af_threshold: float = DEFAULT_AF_THRESHOLD,
+    debug: bool = False,
+    memory_block: int = DEFAULT_MEMORY_BLOCK,
 ) -> tuple[dict[str, dict[str, tuple[str, str, str, str]]], dict[str, dict[str, tuple[str, str, str, str]]], AnalysisStats]:
     """Scan a VCF and classify rare variant trios into inherited and mendelian-bad buckets."""
     af_table = load_af_json(af_json_path)
@@ -111,6 +115,12 @@ def analyze_vcf(
                     dm_bad,
                     stats,
                 )
+
+            log_memory_if_due(
+                stats.variants_seen,
+                debug=debug,
+                memory_block=memory_block,
+            )
 
     return dict(dinh), dict(dm_bad), stats
 
@@ -293,6 +303,8 @@ def save_run_params(
     family_file: Path,
     multiallelic: bool,
     af_threshold: float,
+    debug: bool = False,
+    memory_block: int = DEFAULT_MEMORY_BLOCK,
 ) -> Path:
     """Write the parameters for this run into the chromosome output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -307,6 +319,8 @@ def save_run_params(
         "output_dir": str(output_dir.resolve()),
         "multiallelic": multiallelic,
         "af_threshold": af_threshold,
+        "debug": debug,
+        "memory_block": memory_block,
         "quality_filters": {
             "gq": DEFAULT_GQ,
             "dp": DEFAULT_DP,
