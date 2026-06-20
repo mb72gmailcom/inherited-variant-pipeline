@@ -154,6 +154,7 @@ def _process_multiallelic_line(
             dinh,
             dm_bad,
             stats,
+            clean_ad=True,
         )
 
 
@@ -197,25 +198,31 @@ def _process_trios_for_allele(
     dinh: dict[str, dict[str, tuple[str, str, str, str]]],
     dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
     stats: AnalysisStats,
+    *,
+    clean_ad: bool = False,
 ) -> None:
     parents_cache: dict[int, list[object]] = {}
 
     for child_idx, mother_idx, father_idx in trios_ind:
         child_sample = sample_fields[child_idx]
-        ac, child_gt, child_gq = get_good_site(child_sample, alt_index)
+        ac, child_gt, child_gq = get_good_site(child_sample, alt_index, clean_ad=clean_ad)
         if ac <= 0:
             continue
 
         if mother_idx in parents_cache:
             mac, mother_gt, mother_gq = parents_cache[mother_idx]
         else:
-            mac, mother_gt, mother_gq = get_good_site(sample_fields[mother_idx], alt_index)
+            mac, mother_gt, mother_gq = get_good_site(
+                sample_fields[mother_idx], alt_index, clean_ad=clean_ad
+            )
             parents_cache[mother_idx] = [mac, mother_gt, mother_gq]
 
         if father_idx in parents_cache:
             fac, father_gt, father_gq = parents_cache[father_idx]
         else:
-            fac, father_gt, father_gq = get_good_site(sample_fields[father_idx], alt_index)
+            fac, father_gt, father_gq = get_good_site(
+                sample_fields[father_idx], alt_index, clean_ad=clean_ad
+            )
             parents_cache[father_idx] = [fac, father_gt, father_gq]
 
         pid = sample_header[child_idx]
