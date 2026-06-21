@@ -4,8 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from inherited.analyze import analyze_vcf, save_results, save_run_params
-from inherited.constants import DEFAULT_AF_THRESHOLD, DEFAULT_MEMORY_BLOCK
+from inherited.analyze import analyze_vcf, save_run_params
+from inherited.constants import DEFAULT_AF_THRESHOLD, DEFAULT_BLOCK_SIZE, DEFAULT_MEMORY_BLOCK
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         required=True,
         type=Path,
-        help="Directory for inherited.json and mendelian_bad.json",
+        help="Directory for inherited.tsv and mendelian_bad.tsv",
     )
     analyze.add_argument(
         "--multiallelic",
@@ -63,6 +63,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_MEMORY_BLOCK,
         help=f"Variant interval for debug memory logging (default: {DEFAULT_MEMORY_BLOCK})",
     )
+    analyze.add_argument(
+        "--block-size",
+        type=int,
+        default=DEFAULT_BLOCK_SIZE,
+        help=f"Lines per block when streaming TSV output (default: {DEFAULT_BLOCK_SIZE})",
+    )
 
     return parser
 
@@ -81,16 +87,17 @@ def main(argv: list[str] | None = None) -> None:
             print(f"error: family file not found: {args.family_file}", file=sys.stderr)
             raise SystemExit(1)
 
-        dinh, dm_bad, stats = analyze_vcf(
+        stats = analyze_vcf(
             vcf_path=args.vcf,
             af_json_path=args.af_json,
             family_file=args.family_file,
+            output_dir=args.output_dir,
             multiallelic=args.multiallelic,
             af_threshold=args.af_threshold,
             debug=args.debug,
             memory_block=args.memory_block,
+            block_size=args.block_size,
         )
-        stats = save_results(args.output_dir, dinh, dm_bad, stats)
         params_path = save_run_params(
             args.output_dir,
             vcf_path=args.vcf,
@@ -100,12 +107,13 @@ def main(argv: list[str] | None = None) -> None:
             af_threshold=args.af_threshold,
             debug=args.debug,
             memory_block=args.memory_block,
+            block_size=args.block_size,
         )
         print(
             f"Wrote {stats.inherited_entries} inherited entries "
-            f"({stats.inherited_variants} variants in inherited.json) and "
+            f"({stats.inherited_variants} variants in inherited.tsv) and "
             f"{stats.mendelian_bad_entries} mendelian_bad entries "
-            f"({stats.mendelian_bad_variants} variants in mendelian_bad.json) "
+            f"({stats.mendelian_bad_variants} variants in mendelian_bad.tsv) "
             f"to {args.output_dir}"
         )
         print(f"Wrote parameters to {params_path}")

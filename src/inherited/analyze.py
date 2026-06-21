@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import gzip
 import json
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +12,7 @@ from inherited.af import is_rare, load_af_json
 from inherited.constants import (
     DEFAULT_AB,
     DEFAULT_AF_THRESHOLD,
+    DEFAULT_BLOCK_SIZE,
     DEFAULT_DP,
     DEFAULT_GQ,
     DEFAULT_HAPLO_AB,
@@ -22,6 +22,7 @@ from inherited.constants import (
 from inherited.debug import log_memory_if_due
 from inherited.families import build_trio_indices, load_family_relations
 from inherited.genotype import get_good_site
+from inherited.output import ResultWriter
 
 
 def get_nfields(line: str, n: int) -> list[str]:
@@ -38,91 +39,77 @@ class AnalysisStats:
     mendelian_bad_variants: int = 0
 
 
-def summarize_inherited(
-    dinh: dict[str, dict[str, tuple[str, str, str, str]]],
-) -> tuple[dict[str, int], dict[str, int]]:
-    """Return per-variant and per-person counts for inherited calls."""
-    per_variant = {variant_key: len(people) for variant_key, people in dinh.items()}
-    per_person: dict[str, int] = defaultdict(int)
-    for people in dinh.values():
-        for person_id in people:
-            per_person[person_id] += 1
-    return per_variant, dict(per_person)
-
-
-def summarize_mendelian_bad(
-    dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
-) -> dict[str, int]:
-    """Return counts keyed by mother_gt:father_gt:child_gt."""
-    per_gt_pattern: dict[str, int] = defaultdict(int)
-    for people in dm_bad.values():
-        for _person_id, (mother_gt, father_gt, child_gt, _child_gq) in people.items():
-            gt_key = f"{mother_gt}:{father_gt}:{child_gt}"
-            per_gt_pattern[gt_key] += 1
-    return dict(per_gt_pattern)
-
-
 def analyze_vcf(
     vcf_path: Path,
     af_json_path: Path,
     family_file: Path,
+    output_dir: Path,
     *,
     multiallelic: bool = True,
     af_threshold: float = DEFAULT_AF_THRESHOLD,
     debug: bool = False,
     memory_block: int = DEFAULT_MEMORY_BLOCK,
-) -> tuple[dict[str, dict[str, tuple[str, str, str, str]]], dict[str, dict[str, tuple[str, str, str, str]]], AnalysisStats]:
-    """Scan a VCF and classify rare variant trios into inherited and mendelian-bad buckets."""
+    block_size: int = DEFAULT_BLOCK_SIZE,
+) -> AnalysisStats:
+    """Scan a VCF, classify trios, and stream results to TSV files in blocks."""
     af_table = load_af_json(af_json_path)
     relations = load_family_relations(family_file)
-
-    dinh: dict[str, dict[str, tuple[str, str, str, str]]] = defaultdict(dict)
-    dm_bad: dict[str, dict[str, tuple[str, str, str, str]]] = defaultdict(dict)
+    writer = ResultWriter(output_dir, block_size=block_size)
     stats = AnalysisStats()
 
-    opener = gzip.open if str(vcf_path).endswith(".gz") else open
-    with opener(vcf_path, "rt", encoding="utf-8") as handle:
-        trios_ind: list[tuple[int, int, int]] = []
-        sample_header: list[str] = []
+    try:
+        opener = gzip.open if str(vcf_path).endswith(".gz") else open
+        with opener(vcf_path, "rt", encoding="utf-8") as handle:
+            trios_ind: list[tuple[int, int, int]] = []
+            sample_header: list[str] = []
 
-        for line in handle:
-            if line.startswith("##"):
-                continue
-            if line.startswith("#CHROM"):
-                sample_header = line.strip().split("\t")[9:]
-                _, trios_ind = build_trio_indices(sample_header, relations.trio_cl)
-                continue
+            for line in handle:
+                if line.startswith("##"):
+                    continue
+                if line.startswith("#CHROM"):
+                    sample_header = line.strip().split("\t")[9:]
+                    _, trios_ind = build_trio_indices(sample_header, relations.trio_cl)
+                    continue
 
-            if multiallelic:
-                _process_multiallelic_line(
-                    line,
-                    af_table,
-                    af_threshold,
-                    trios_ind,
-                    sample_header,
-                    dinh,
-                    dm_bad,
-                    stats,
+                if multiallelic:
+                    _process_multiallelic_line(
+                        line,
+                        af_table,
+                        af_threshold,
+                        trios_ind,
+                        sample_header,
+                        writer,
+                        stats,
+                    )
+                else:
+                    _process_biallelic_line(
+                        line,
+                        af_table,
+                        af_threshold,
+                        trios_ind,
+                        sample_header,
+                        writer,
+                        stats,
+                    )
+
+                log_memory_if_due(
+                    stats.variants_seen,
+                    debug=debug,
+                    memory_block=memory_block,
                 )
-            else:
-                _process_biallelic_line(
-                    line,
-                    af_table,
-                    af_threshold,
-                    trios_ind,
-                    sample_header,
-                    dinh,
-                    dm_bad,
-                    stats,
-                )
+    finally:
+        writer.close()
 
-            log_memory_if_due(
-                stats.variants_seen,
-                debug=debug,
-                memory_block=memory_block,
-            )
+    writer.save_summary_files(
+        variants_seen=stats.variants_seen,
+        alleles_tested=stats.alleles_tested,
+    )
 
-    return dict(dinh), dict(dm_bad), stats
+    stats.inherited_entries = writer.inherited_entries
+    stats.mendelian_bad_entries = writer.mendelian_bad_entries
+    stats.inherited_variants = writer.inherited_variants
+    stats.mendelian_bad_variants = writer.mendelian_bad_variants
+    return stats
 
 
 def _process_multiallelic_line(
@@ -131,8 +118,7 @@ def _process_multiallelic_line(
     af_threshold: float,
     trios_ind: list[tuple[int, int, int]],
     sample_header: list[str],
-    dinh: dict[str, dict[str, tuple[str, str, str, str]]],
-    dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
+    writer: ResultWriter,
     stats: AnalysisStats,
 ) -> None:
     chrom, pos, keys, ref, alts = get_nfields(line, 5)
@@ -156,14 +142,16 @@ def _process_multiallelic_line(
 
         stats.alleles_tested += 1
         _process_trios_for_allele(
+            chrom,
+            pos,
+            ref,
+            alt,
             key,
             alt_index,
             sample_fields,
             sample_header,
             trios_ind,
-            dinh,
-            dm_bad,
-            stats,
+            writer,
             clean_ad=True,
         )
 
@@ -174,8 +162,7 @@ def _process_biallelic_line(
     af_threshold: float,
     trios_ind: list[tuple[int, int, int]],
     sample_header: list[str],
-    dinh: dict[str, dict[str, tuple[str, str, str, str]]],
-    dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
+    writer: ResultWriter,
     stats: AnalysisStats,
 ) -> None:
     chrom, pos, key, ref, alt = get_nfields(line, 5)
@@ -188,30 +175,36 @@ def _process_biallelic_line(
     stats.alleles_tested += 1
     sample_fields = line.rstrip().split("\t")[9:]
     _process_trios_for_allele(
+        chrom,
+        pos,
+        ref,
+        alt,
         key,
         1,
         sample_fields,
         sample_header,
         trios_ind,
-        dinh,
-        dm_bad,
-        stats,
+        writer,
     )
 
 
 def _process_trios_for_allele(
-    key: str,
+    chrom: str,
+    pos: str,
+    ref: str,
+    alt: str,
+    variant_key: str,
     alt_index: int,
     sample_fields: list[str],
     sample_header: list[str],
     trios_ind: list[tuple[int, int, int]],
-    dinh: dict[str, dict[str, tuple[str, str, str, str]]],
-    dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
-    stats: AnalysisStats,
+    writer: ResultWriter,
     *,
     clean_ad: bool = False,
 ) -> None:
     parents_cache: dict[int, list[object]] = {}
+    inherited_hits: dict[str, tuple[str, str, str, str]] = {}
+    bad_hits: dict[str, tuple[str, str, str, str]] = {}
 
     for child_idx, mother_idx, father_idx in trios_ind:
         child_sample = sample_fields[child_idx]
@@ -255,44 +248,14 @@ def _process_trios_for_allele(
             continue
 
         if bucket == "inherited":
-            dinh[key][pid] = record
-            stats.inherited_entries += 1
+            inherited_hits[pid] = record
         else:
-            dm_bad[key][pid] = record
-            stats.mendelian_bad_entries += 1
+            bad_hits[pid] = record
 
-
-def save_results(
-    output_dir: Path,
-    dinh: dict[str, dict[str, tuple[str, str, str, str]]],
-    dm_bad: dict[str, dict[str, tuple[str, str, str, str]]],
-    stats: AnalysisStats,
-) -> AnalysisStats:
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    inherited_per_variant, inherited_per_person = summarize_inherited(dinh)
-    mendelian_bad_per_gt = summarize_mendelian_bad(dm_bad)
-
-    stats.inherited_variants = len(dinh)
-    stats.mendelian_bad_variants = len(dm_bad)
-
-    _write_json(output_dir / "inherited.json", dinh)
-    _write_json(output_dir / "mendelian_bad.json", dm_bad)
-    _write_json(output_dir / "inherited_per_variant.json", inherited_per_variant)
-    _write_json(output_dir / "inherited_per_person.json", inherited_per_person)
-    _write_json(output_dir / "mendelian_bad_per_gt.json", mendelian_bad_per_gt)
-    _write_json(
-        output_dir / "stats.json",
-        {
-            "variants_seen": stats.variants_seen,
-            "alleles_tested": stats.alleles_tested,
-            "inherited_entries": stats.inherited_entries,
-            "inherited_variants": stats.inherited_variants,
-            "mendelian_bad_entries": stats.mendelian_bad_entries,
-            "mendelian_bad_variants": stats.mendelian_bad_variants,
-        },
-    )
-    return stats
+    if inherited_hits:
+        writer.write_inherited(chrom, pos, ref, alt, variant_key, inherited_hits)
+    if bad_hits:
+        writer.write_mendelian_bad(chrom, pos, ref, alt, bad_hits)
 
 
 def save_run_params(
@@ -305,6 +268,7 @@ def save_run_params(
     af_threshold: float,
     debug: bool = False,
     memory_block: int = DEFAULT_MEMORY_BLOCK,
+    block_size: int = DEFAULT_BLOCK_SIZE,
 ) -> Path:
     """Write the parameters for this run into the chromosome output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -321,6 +285,7 @@ def save_run_params(
         "af_threshold": af_threshold,
         "debug": debug,
         "memory_block": memory_block,
+        "block_size": block_size,
         "quality_filters": {
             "gq": DEFAULT_GQ,
             "dp": DEFAULT_DP,
@@ -329,10 +294,6 @@ def save_run_params(
             "haplo_ab": DEFAULT_HAPLO_AB,
         },
     }
-    _write_json(params_path, payload)
-    return params_path
-
-
-def _write_json(path: Path, payload: object) -> None:
-    with path.open("w", encoding="utf-8") as handle:
+    with params_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
+    return params_path
