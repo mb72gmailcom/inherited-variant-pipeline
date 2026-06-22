@@ -50,11 +50,12 @@ def analyze_vcf(
     debug: bool = False,
     memory_block: int = DEFAULT_MEMORY_BLOCK,
     block_size: int = DEFAULT_BLOCK_SIZE,
+    short_format: bool = True,
 ) -> AnalysisStats:
     """Scan a VCF, classify trios, and stream results to TSV files in blocks."""
     af_table = load_af_json(af_json_path)
     relations = load_family_relations(family_file)
-    writer = ResultWriter(output_dir, block_size=block_size)
+    writer = ResultWriter(output_dir, block_size=block_size, short_format=short_format)
     stats = AnalysisStats()
 
     try:
@@ -269,6 +270,7 @@ def save_run_params(
     debug: bool = False,
     memory_block: int = DEFAULT_MEMORY_BLOCK,
     block_size: int = DEFAULT_BLOCK_SIZE,
+    short_format: bool = True,
 ) -> Path:
     """Write the parameters for this run into the chromosome output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -286,6 +288,7 @@ def save_run_params(
         "debug": debug,
         "memory_block": memory_block,
         "block_size": block_size,
+        "short_format": short_format,
         "quality_filters": {
             "gq": DEFAULT_GQ,
             "dp": DEFAULT_DP,

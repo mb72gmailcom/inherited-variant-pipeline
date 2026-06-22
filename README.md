@@ -87,16 +87,18 @@ The output directory contains:
 
 Each chromosome output directory (e.g. `results/chr22/`) contains its own `params.json` alongside the result files.
 
-Result TSV columns:
+Result TSV columns (default `--short-format`):
+
+```text
+#CHROM  POS  ID  REF  ALT  PATIENTS
+22      3000 .   A   G    child1;child2
+```
+
+Use `--no-short-format` for full genotype output:
 
 ```text
 #CHROM  POS  ID  REF  ALT  TRIO_CALLS
-```
-
-`TRIO_CALLS` encodes former `dinh[key]` / `dm_bad[key]` values as:
-
-```text
-child1=0/1|0/0|0/1|30;child2=0/1|0/1|0/1|28
+22      3000 .   A   G    child1=0/1|0/0|0/1|30;child2=0/1|0/1|0/1|28
 ```
 
 Use `--block-size` (default `10000`) to control how many lines are buffered in memory before flushing to disk.

@@ -69,6 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_BLOCK_SIZE,
         help=f"Lines per block when streaming TSV output (default: {DEFAULT_BLOCK_SIZE})",
     )
+    analyze.add_argument(
+        "--short-format",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write only patient IDs in the last TSV column (default: True)",
+    )
 
     return parser
 
@@ -97,6 +103,7 @@ def main(argv: list[str] | None = None) -> None:
             debug=args.debug,
             memory_block=args.memory_block,
             block_size=args.block_size,
+            short_format=args.short_format,
         )
         params_path = save_run_params(
             args.output_dir,
@@ -108,6 +115,7 @@ def main(argv: list[str] | None = None) -> None:
             debug=args.debug,
             memory_block=args.memory_block,
             block_size=args.block_size,
+            short_format=args.short_format,
         )
         print(
             f"Wrote {stats.inherited_entries} inherited entries "
