@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 
 from inherited.analyze import analyze_vcf, save_run_params
-from inherited.constants import DEFAULT_AF_THRESHOLD, DEFAULT_BLOCK_SIZE, DEFAULT_MEMORY_BLOCK
+from inherited.constants import (
+    DEFAULT_AF_THRESHOLD,
+    DEFAULT_BLOCK_SIZE,
+    DEFAULT_MEMORY_BLOCK,
+    DEFAULT_SEGMENT_SIZE,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         required=True,
         type=Path,
-        help="Directory for inherited.tsv and mendelian_bad.tsv",
+        help="Directory for segmented inherited/mendelian_bad TSV output",
     )
     analyze.add_argument(
         "--multiallelic",
@@ -70,10 +75,24 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Lines per block when streaming TSV output (default: {DEFAULT_BLOCK_SIZE})",
     )
     analyze.add_argument(
+        "--segment-size",
+        type=int,
+        default=DEFAULT_SEGMENT_SIZE,
+        help=(
+            f"Max result lines per output segment; 0 disables segmentation "
+            f"(default: {DEFAULT_SEGMENT_SIZE})"
+        ),
+    )
+    analyze.add_argument(
         "--short-format",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Write only patient IDs in the last TSV column (default: True)",
+    )
+    analyze.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from checkpoint.json in the output directory",
     )
 
     return parser
@@ -93,18 +112,25 @@ def main(argv: list[str] | None = None) -> None:
             print(f"error: family file not found: {args.family_file}", file=sys.stderr)
             raise SystemExit(1)
 
-        stats = analyze_vcf(
-            vcf_path=args.vcf,
-            af_json_path=args.af_json,
-            family_file=args.family_file,
-            output_dir=args.output_dir,
-            multiallelic=args.multiallelic,
-            af_threshold=args.af_threshold,
-            debug=args.debug,
-            memory_block=args.memory_block,
-            block_size=args.block_size,
-            short_format=args.short_format,
-        )
+        try:
+            stats = analyze_vcf(
+                vcf_path=args.vcf,
+                af_json_path=args.af_json,
+                family_file=args.family_file,
+                output_dir=args.output_dir,
+                multiallelic=args.multiallelic,
+                af_threshold=args.af_threshold,
+                debug=args.debug,
+                memory_block=args.memory_block,
+                block_size=args.block_size,
+                segment_size=args.segment_size,
+                short_format=args.short_format,
+                resume=args.resume,
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
         params_path = save_run_params(
             args.output_dir,
             vcf_path=args.vcf,
@@ -115,13 +141,20 @@ def main(argv: list[str] | None = None) -> None:
             debug=args.debug,
             memory_block=args.memory_block,
             block_size=args.block_size,
+            segment_size=args.segment_size,
             short_format=args.short_format,
+            resume=args.resume,
+        )
+        output_label = (
+            "segmented TSV files"
+            if args.segment_size > 0
+            else "inherited.tsv / mendelian_bad.tsv"
         )
         print(
             f"Wrote {stats.inherited_entries} inherited entries "
-            f"({stats.inherited_variants} variants in inherited.tsv) and "
+            f"({stats.inherited_variants} variants) and "
             f"{stats.mendelian_bad_entries} mendelian_bad entries "
-            f"({stats.mendelian_bad_variants} variants in mendelian_bad.tsv) "
+            f"({stats.mendelian_bad_variants} variants) as {output_label} "
             f"to {args.output_dir}"
         )
         print(f"Wrote parameters to {params_path}")

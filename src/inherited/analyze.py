@@ -9,6 +9,7 @@ from typing import Any
 
 from inherited import __version__
 from inherited.af import is_rare, load_af_json
+from inherited.checkpoint import load_checkpoint
 from inherited.constants import (
     DEFAULT_AB,
     DEFAULT_AF_THRESHOLD,
@@ -18,6 +19,7 @@ from inherited.constants import (
     DEFAULT_HAPLO_AB,
     DEFAULT_HAPLO_DP,
     DEFAULT_MEMORY_BLOCK,
+    DEFAULT_SEGMENT_SIZE,
 )
 from inherited.debug import log_memory_if_due
 from inherited.families import build_trio_indices, load_family_relations
@@ -50,13 +52,40 @@ def analyze_vcf(
     debug: bool = False,
     memory_block: int = DEFAULT_MEMORY_BLOCK,
     block_size: int = DEFAULT_BLOCK_SIZE,
+    segment_size: int = DEFAULT_SEGMENT_SIZE,
     short_format: bool = True,
+    resume: bool = False,
 ) -> AnalysisStats:
-    """Scan a VCF, classify trios, and stream results to TSV files in blocks."""
+    """Scan a VCF, classify trios, and stream results to segmented TSV files."""
+    if resume and segment_size <= 0:
+        raise ValueError("--resume requires --segment-size > 0")
+
     af_table = load_af_json(af_json_path)
     relations = load_family_relations(family_file)
-    writer = ResultWriter(output_dir, block_size=block_size, short_format=short_format)
-    stats = AnalysisStats()
+
+    checkpoint = load_checkpoint(output_dir) if resume else None
+    if resume and checkpoint is None:
+        raise FileNotFoundError(f"No checkpoint found in {output_dir}")
+    if resume and checkpoint.completed:
+        raise ValueError(f"Checkpoint in {output_dir} is already marked completed")
+
+    if checkpoint is not None:
+        writer = ResultWriter.from_checkpoint(
+            output_dir,
+            checkpoint,
+            block_size=block_size,
+            segment_size=segment_size,
+            short_format=short_format,
+        )
+        resume_last_pos = checkpoint.last_pos
+    else:
+        writer = ResultWriter(
+            output_dir,
+            block_size=block_size,
+            segment_size=segment_size,
+            short_format=short_format,
+        )
+        resume_last_pos = -1
 
     try:
         opener = gzip.open if str(vcf_path).endswith(".gz") else open
@@ -72,6 +101,11 @@ def analyze_vcf(
                     _, trios_ind = build_trio_indices(sample_header, relations.trio_cl)
                     continue
 
+                fields = line.rstrip().split("\t")
+                pos = int(fields[1])
+                if pos <= resume_last_pos:
+                    continue
+
                 if multiallelic:
                     _process_multiallelic_line(
                         line,
@@ -80,7 +114,6 @@ def analyze_vcf(
                         trios_ind,
                         sample_header,
                         writer,
-                        stats,
                     )
                 else:
                     _process_biallelic_line(
@@ -90,27 +123,29 @@ def analyze_vcf(
                         trios_ind,
                         sample_header,
                         writer,
-                        stats,
                     )
 
                 log_memory_if_due(
-                    stats.variants_seen,
+                    writer.cumulative.variants_seen,
                     debug=debug,
                     memory_block=memory_block,
                 )
     finally:
         writer.close()
 
-    writer.save_summary_files(
-        variants_seen=stats.variants_seen,
-        alleles_tested=stats.alleles_tested,
-    )
+    writer.finalize(completed=True)
+    return _stats_from_writer(writer)
 
-    stats.inherited_entries = writer.inherited_entries
-    stats.mendelian_bad_entries = writer.mendelian_bad_entries
-    stats.inherited_variants = writer.inherited_variants
-    stats.mendelian_bad_variants = writer.mendelian_bad_variants
-    return stats
+
+def _stats_from_writer(writer: ResultWriter) -> AnalysisStats:
+    return AnalysisStats(
+        variants_seen=writer.cumulative.variants_seen,
+        alleles_tested=writer.cumulative.alleles_tested,
+        inherited_entries=writer.inherited_entries,
+        mendelian_bad_entries=writer.mendelian_bad_entries,
+        inherited_variants=writer.inherited_variants,
+        mendelian_bad_variants=writer.mendelian_bad_variants,
+    )
 
 
 def _process_multiallelic_line(
@@ -120,7 +155,6 @@ def _process_multiallelic_line(
     trios_ind: list[tuple[int, int, int]],
     sample_header: list[str],
     writer: ResultWriter,
-    stats: AnalysisStats,
 ) -> None:
     chrom, pos, keys, ref, alts = get_nfields(line, 5)
     if len(ref) > 1:
@@ -129,7 +163,7 @@ def _process_multiallelic_line(
     skeys = keys.split(";")
     salts = alts.split(",")
     sample_fields = line.rstrip().split("\t")[9:]
-    stats.variants_seen += 1
+    writer.cumulative.variants_seen += 1
 
     for alt_index, key in enumerate(skeys, start=1):
         if alt_index > len(salts):
@@ -141,7 +175,7 @@ def _process_multiallelic_line(
         if len(alt) > 1:
             continue
 
-        stats.alleles_tested += 1
+        writer.cumulative.alleles_tested += 1
         _process_trios_for_allele(
             chrom,
             pos,
@@ -164,7 +198,6 @@ def _process_biallelic_line(
     trios_ind: list[tuple[int, int, int]],
     sample_header: list[str],
     writer: ResultWriter,
-    stats: AnalysisStats,
 ) -> None:
     chrom, pos, key, ref, alt = get_nfields(line, 5)
     if len(ref) > 1 and len(alt) > 1:
@@ -172,8 +205,8 @@ def _process_biallelic_line(
     if not is_rare(af_table, key, af_threshold):
         return
 
-    stats.variants_seen += 1
-    stats.alleles_tested += 1
+    writer.cumulative.variants_seen += 1
+    writer.cumulative.alleles_tested += 1
     sample_fields = line.rstrip().split("\t")[9:]
     _process_trios_for_allele(
         chrom,
@@ -270,7 +303,9 @@ def save_run_params(
     debug: bool = False,
     memory_block: int = DEFAULT_MEMORY_BLOCK,
     block_size: int = DEFAULT_BLOCK_SIZE,
+    segment_size: int = DEFAULT_SEGMENT_SIZE,
     short_format: bool = True,
+    resume: bool = False,
 ) -> Path:
     """Write the parameters for this run into the chromosome output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -288,7 +323,9 @@ def save_run_params(
         "debug": debug,
         "memory_block": memory_block,
         "block_size": block_size,
+        "segment_size": segment_size,
         "short_format": short_format,
+        "resume": resume,
         "quality_filters": {
             "gq": DEFAULT_GQ,
             "dp": DEFAULT_DP,

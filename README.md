@@ -77,12 +77,15 @@ python run.py analyze \
 
 The output directory contains:
 
-- `inherited.tsv` — rare inherited variant calls (tab-separated, streamed in blocks)
-- `mendelian_bad.tsv` — mendelian-inconsistent calls
-- `inherited_per_variant.json` — variant key → number of people with that inherited variant
-- `inherited_per_person.json` — person id → number of inherited variants for that person
-- `mendelian_bad_per_gt.json` — `mother_gt:father_gt:child_gt` → number of people with that pattern
-- `stats.json` — summary counts
+- `inherited_XXXXX.tsv` / `mendelian_bad_XXXXX.tsv` — segmented result files (when `--segment-size > 0`)
+- `inherited.tsv` / `mendelian_bad.tsv` — single files when `--segment-size 0`
+- `checkpoint.json` — resume point (updated after each segment)
+- `stats_cumulative.json` — running totals (updated after each segment)
+- `inherited_per_variant_segXXXXX.json` — per-segment variant counts (merged at end)
+- `inherited_per_variant.json` — merged variant counts
+- `inherited_per_person.json` — person id → number of inherited variants
+- `mendelian_bad_per_gt.json` — `mother_gt:father_gt:child_gt` → count
+- `stats.json` — final summary counts
 - `params.json` — parameters used for this run
 
 Each chromosome output directory (e.g. `results/chr22/`) contains its own `params.json` alongside the result files.
@@ -98,10 +101,20 @@ Use `--no-short-format` for full genotype output:
 
 ```text
 #CHROM  POS  ID  REF  ALT  TRIO_CALLS
-22      3000 .   A   G    child1=0/1|0/0|0/1|30;child2=0/1|0/1|0/1|28
+22      3000 .   A   G    child1=0/1|0/0|0/1|30
 ```
 
-Use `--block-size` (default `10000`) to control how many lines are buffered in memory before flushing to disk.
+Use `--block-size` (default `10000`) for in-memory buffer flushes within a segment.
+
+Use `--segment-size` (default `1000000`) to split output into segment files. Set `--segment-size 0` to disable segmentation.
+
+Resume after a crash:
+
+```bash
+python run.py analyze ... -o results/chr2 --resume
+```
+
+Requires an existing incomplete `checkpoint.json` and `--segment-size > 0`.
 
 ## Tests
 

@@ -1,6 +1,4 @@
-from pathlib import Path
-
-from inherited.output import BlockWriter, serialize_trio_calls
+from inherited.output import BlockWriter, serialize_patient_ids
 
 
 def test_block_writer_flushes_in_blocks(tmp_path):
@@ -8,12 +6,12 @@ def test_block_writer_flushes_in_blocks(tmp_path):
     writer = BlockWriter(path, block_size=2)
     hits = {"p1": ("0/1", "0/0", "0/1", "30")}
 
-    writer.append("22", "100", "A", "G", serialize_trio_calls(hits))
-    writer.append("22", "200", "C", "T", serialize_trio_calls(hits))
+    writer.append("22", "100", "A", "G", serialize_patient_ids(hits))
+    writer.append("22", "200", "C", "T", serialize_patient_ids(hits))
     assert writer.lines_written == 2
     assert writer.block == []
 
-    writer.append("22", "300", "G", "A", serialize_trio_calls(hits))
+    writer.append("22", "300", "G", "A", serialize_patient_ids(hits))
     assert writer.lines_written == 2
     assert len(writer.block) == 1
 
